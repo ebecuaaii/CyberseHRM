@@ -93,6 +93,17 @@ namespace HRMCyberse
 
             builder.Services.AddAuthorization();
 
+            // Configure CORS for React Native
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowReactNative", policy =>
+                {
+                    policy.AllowAnyOrigin()
+                          .AllowAnyMethod()
+                          .AllowAnyHeader();
+                });
+            });
+
             builder.Services.AddControllers();
             
             // Configure Swagger/OpenAPI
@@ -186,6 +197,9 @@ namespace HRMCyberse
             }
 
             app.UseHttpsRedirection();
+
+            // Enable CORS
+            app.UseCors("AllowReactNative");
 
             // Enable response compression
             app.UseResponseCompression();

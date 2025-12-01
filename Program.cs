@@ -14,6 +14,12 @@ namespace HRMCyberse
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Configure Kestrel to listen on all network interfaces
+            builder.WebHost.ConfigureKestrel(serverOptions =>
+            {
+                serverOptions.ListenAnyIP(5267); // Listen on all IPs (0.0.0.0) port 5267
+            });
+
             // Add services to the container.
             
             // Configure response compression for better performance
@@ -104,7 +110,13 @@ namespace HRMCyberse
                 });
             });
 
-            builder.Services.AddControllers();
+            builder.Services.AddControllers()
+                .AddJsonOptions(options =>
+                {
+                    // Đảm bảo JSON dùng camelCase để frontend dễ sử dụng
+                    options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+                    options.JsonSerializerOptions.WriteIndented = true; // Dễ đọc khi debug
+                });
             
             // Configure Swagger/OpenAPI
             builder.Services.AddEndpointsApiExplorer();
@@ -185,16 +197,14 @@ namespace HRMCyberse
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
+            // Enable Swagger for all environments (for development/testing)
+            app.UseSwagger();
+            app.UseSwaggerUI(c =>
             {
-                app.UseSwagger();
-                app.UseSwaggerUI(c =>
-                {
-                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "HRM Cyberse API v1");
-                    c.RoutePrefix = "swagger";
-                    c.DocumentTitle = "HRM Cyberse API Documentation";
-                });
-            }
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "HRM Cyberse API v1");
+                c.RoutePrefix = "swagger";
+                c.DocumentTitle = "HRM Cyberse API Documentation";
+            });
 
             app.UseHttpsRedirection();
 

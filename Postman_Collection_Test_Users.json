@@ -1,0 +1,332 @@
+{
+    "info": {
+        "name": "HRM Cyberse - Test Users API",
+        "description": "Collection để test API lấy danh sách nhân viên và kiểm tra Role/Position",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:5267/api",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "1. Authentication",
+            "item": [
+                {
+                    "name": "Login - Lấy JWT Token",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    if (jsonData.success && jsonData.token) {",
+                                    "        pm.collectionVariables.set(\"token\", jsonData.token);",
+                                    "        console.log(\"Token đã được lưu:\", jsonData.token);",
+                                    "    }",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"123456\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/login",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "Đăng nhập để lấy JWT token. Thay đổi username/password nếu cần."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "2. Users Management",
+            "item": [
+                {
+                    "name": "Get All Users - Lấy danh sách nhân viên",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Response is array\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData).to.be.an('array');",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Check Role and Position fields\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    if (jsonData.length > 0) {",
+                                    "        var firstUser = jsonData[0];",
+                                    "        console.log(\"User đầu tiên:\", JSON.stringify(firstUser, null, 2));",
+                                    "        ",
+                                    "        pm.expect(firstUser).to.have.property('roleName');",
+                                    "        pm.expect(firstUser).to.have.property('positionName');",
+                                    "        ",
+                                    "        var usersWithRole = jsonData.filter(u => u.roleName != null && u.roleName !== '');",
+                                    "        var usersWithPosition = jsonData.filter(u => u.positionName != null && u.positionName !== '');",
+                                    "        ",
+                                    "        console.log(\"Tổng số users:\", jsonData.length);",
+                                    "        console.log(\"Users có Role:\", usersWithRole.length);",
+                                    "        console.log(\"Users có Position:\", usersWithPosition.length);",
+                                    "        ",
+                                    "        if (usersWithRole.length === 0) {",
+                                    "            console.warn(\"⚠️ CẢNH BÁO: Không có user nào có Role!\");",
+                                    "        }",
+                                    "        if (usersWithPosition.length === 0) {",
+                                    "            console.warn(\"⚠️ CẢNH BÁO: Không có user nào có Position!\");",
+                                    "        }",
+                                    "    }",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/users",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "users"
+                            ]
+                        },
+                        "description": "Lấy danh sách tất cả nhân viên active. Kiểm tra xem RoleName và PositionName có được trả về không."
+                    }
+                },
+                {
+                    "name": "Get Users Debug - Chi tiết debug",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "var jsonData = pm.response.json();",
+                                    "console.log(\"=== DEBUG INFO ===\");",
+                                    "console.log(JSON.stringify(jsonData, null, 2));",
+                                    "",
+                                    "if (jsonData.length > 0) {",
+                                    "    var userWithoutRole = jsonData.filter(u => u.roleIsNull === true);",
+                                    "    var userWithoutPosition = jsonData.filter(u => u.positionIsNull === true);",
+                                    "    ",
+                                    "    console.log(\"\\nUsers không có Role:\", userWithoutRole.length);",
+                                    "    console.log(\"Users không có Position:\", userWithoutPosition.length);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/users/debug",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "users",
+                                "debug"
+                            ]
+                        },
+                        "description": "Endpoint debug để xem chi tiết Roleid, Positionid và navigation properties của từng user."
+                    }
+                },
+                {
+                    "name": "Fix User Data - Gán Role/Position mặc định",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "var jsonData = pm.response.json();",
+                                    "console.log(\"=== FIX DATA RESULT ===\");",
+                                    "console.log(JSON.stringify(jsonData, null, 2));",
+                                    "",
+                                    "if (jsonData.success) {",
+                                    "    console.log(\"✅ Đã fix dữ liệu cho\", jsonData.fixedCount, \"users\");",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/users/fix-data",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "users",
+                                "fix-data"
+                            ]
+                        },
+                        "description": "Gán Role và Position mặc định cho các user chưa có. Chạy endpoint này nếu users không có Roleid hoặc Positionid."
+                    }
+                },
+                {
+                    "name": "Get User By ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/user/:id",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "user",
+                                ":id"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "1",
+                                    "description": "User ID"
+                                }
+                            ]
+                        },
+                        "description": "Lấy thông tin chi tiết của một user theo ID."
+                    }
+                },
+                {
+                    "name": "Update User - Admin gán Role/Position/Department",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Response has updated fields\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    console.log(\"User sau khi update:\", JSON.stringify(jsonData, null, 2));",
+                                    "    ",
+                                    "    pm.expect(jsonData).to.have.property('roleName');",
+                                    "    pm.expect(jsonData).to.have.property('positionName');",
+                                    "    pm.expect(jsonData).to.have.property('departmentName');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"roleName\": \"Employee\",\n    \"positionName\": \"Nhân viên\",\n    \"departmentName\": \"Pha chế\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/user/:id",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "user",
+                                ":id"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "id",
+                                    "value": "9",
+                                    "description": "User ID cần update (ví dụ: user id 9 chưa có position)"
+                                }
+                            ]
+                        },
+                        "description": "Admin cập nhật role, position, department cho user. Chỉ Admin mới được phép. Có thể chỉ gửi các field cần update (không cần gửi tất cả)."
+                    }
+                }
+            ]
+        }
+    ]
+}

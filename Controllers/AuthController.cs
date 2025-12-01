@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using HRMCyberse.Data;
 using HRMCyberse.Models;
@@ -101,7 +102,7 @@ namespace HRMCyberse.Controllers
                 }
                 else
                 {
-                    user.Roleid = 2; // Mặc định role user thường
+                    user.Roleid = 3; // Mặc định role user thường
                 }
 
                 if (!string.IsNullOrEmpty(registerDto.DepartmentName))
@@ -154,6 +155,161 @@ namespace HRMCyberse.Controllers
             }
         }
 
+        [HttpGet("users")]
+        public async Task<ActionResult<List<UserResponseDto>>> GetAllUsers()
+        {
+            try
+            {
+                var users = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.Department)
+                    .Include(u => u.Position)
+                    .Where(u => u.Isactive == true)
+                    .OrderBy(u => u.Fullname)
+                    .AsSplitQuery() // Tối ưu cho multiple includes
+                    .ToListAsync();
+
+                var response = users.Select(user => new UserResponseDto
+                {
+                    Id = user.Id,
+                    Username = user.Username,
+                    Fullname = user.Fullname,
+                    Email = user.Email,
+                    Phone = user.Phone,
+                    RoleName = user.Role?.Rolename ?? null,
+                    DepartmentName = user.Department?.Name ?? null,
+                    PositionName = user.Position?.Titlename ?? null,
+                    IsActive = user.Isactive,
+                    CreatedAt = user.Createdat
+                }).ToList();
+
+                _logger.LogInformation("Lấy danh sách {Count} nhân viên. Số user có role: {RoleCount}, có position: {PositionCount}", 
+                    response.Count, 
+                    response.Count(r => !string.IsNullOrEmpty(r.RoleName)),
+                    response.Count(r => !string.IsNullOrEmpty(r.PositionName)));
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi lấy danh sách nhân viên");
+                return StatusCode(500, "Lỗi server khi lấy dữ liệu");
+            }
+        }
+
+        [HttpGet("users/debug")]
+        public async Task<ActionResult> GetAllUsersDebug()
+        {
+            try
+            {
+                var users = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.Department)
+                    .Include(u => u.Position)
+                    .Where(u => u.Isactive == true)
+                    .OrderBy(u => u.Fullname)
+                    .ToListAsync();
+
+                var debugInfo = users.Select(user => new
+                {
+                    user.Id,
+                    user.Username,
+                    user.Fullname,
+                    user.Roleid,
+                    RoleName = user.Role?.Rolename,
+                    RoleIsNull = user.Role == null,
+                    user.Departmentid,
+                    DepartmentName = user.Department?.Name,
+                    DepartmentIsNull = user.Department == null,
+                    user.Positionid,
+                    PositionName = user.Position?.Titlename,
+                    PositionIsNull = user.Position == null
+                }).ToList();
+
+                return Ok(debugInfo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi debug users");
+                return StatusCode(500, ex.Message);
+            }
+        }
+
+        [HttpPost("users/fix-data")]
+        public async Task<ActionResult> FixUserData()
+        {
+            try
+            {
+                // Lấy role Employee mặc định (id = 3)
+                var defaultRole = await _context.Roles.FirstOrDefaultAsync(r => r.Rolename == "Employee");
+                if (defaultRole == null)
+                {
+                    defaultRole = await _context.Roles.FirstOrDefaultAsync();
+                }
+
+                // Lấy position mặc định
+                var defaultPosition = await _context.Positiontitles.FirstOrDefaultAsync(p => p.Titlename == "Employee");
+                if (defaultPosition == null)
+                {
+                    defaultPosition = await _context.Positiontitles.FirstOrDefaultAsync();
+                }
+
+                // Lấy department mặc định
+                var defaultDepartment = await _context.Departments.FirstOrDefaultAsync();
+
+                // Lấy tất cả users active
+                var users = await _context.Users
+                    .Where(u => u.Isactive == true)
+                    .ToListAsync();
+
+                int fixedCount = 0;
+                foreach (var user in users)
+                {
+                    bool needUpdate = false;
+
+                    if (user.Roleid == null && defaultRole != null)
+                    {
+                        user.Roleid = defaultRole.Id;
+                        needUpdate = true;
+                    }
+
+                    if (user.Positionid == null && defaultPosition != null)
+                    {
+                        user.Positionid = defaultPosition.Id;
+                        needUpdate = true;
+                    }
+
+                    if (user.Departmentid == null && defaultDepartment != null)
+                    {
+                        user.Departmentid = defaultDepartment.Id;
+                        needUpdate = true;
+                    }
+
+                    if (needUpdate)
+                    {
+                        fixedCount++;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = $"Đã fix dữ liệu cho {fixedCount} users",
+                    fixedCount,
+                    totalUsers = users.Count,
+                    defaultRole = defaultRole?.Rolename,
+                    defaultPosition = defaultPosition?.Titlename,
+                    defaultDepartment = defaultDepartment?.Name
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi fix user data");
+                return StatusCode(500, ex.Message);
+            }
+        }
+
         [HttpGet("user/{id}")]
         public async Task<ActionResult<UserResponseDto>> GetUser(int id)
         {
@@ -190,6 +346,121 @@ namespace HRMCyberse.Controllers
             {
                 _logger.LogError(ex, "Lỗi khi lấy thông tin user {Id}", id);
                 return StatusCode(500, "Lỗi server khi lấy dữ liệu");
+            }
+        }
+
+        /// <summary>
+        /// Admin cập nhật thông tin user (role, position, department, và các thông tin khác)
+        /// </summary>
+        [HttpPut("user/{id}")]
+        [Authorize(Roles = "Admin, Manager")]
+        public async Task<ActionResult<UserResponseDto>> UpdateUser(int id, UpdateUserDto updateDto)
+        {
+            try
+            {
+                var user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Id == id);
+
+                if (user == null)
+                {
+                    return NotFound("Không tìm thấy người dùng");
+                }
+
+                // Cập nhật Role nếu có
+                if (!string.IsNullOrEmpty(updateDto.RoleName))
+                {
+                    var role = await _context.Roles.FirstOrDefaultAsync(r => r.Rolename == updateDto.RoleName);
+                    if (role == null)
+                    {
+                        return BadRequest($"Không tìm thấy role: {updateDto.RoleName}");
+                    }
+                    user.Roleid = role.Id;
+                }
+
+                // Cập nhật Position nếu có
+                if (!string.IsNullOrEmpty(updateDto.PositionName))
+                {
+                    var position = await _context.Positiontitles.FirstOrDefaultAsync(p => p.Titlename == updateDto.PositionName);
+                    if (position == null)
+                    {
+                        return BadRequest($"Không tìm thấy position: {updateDto.PositionName}");
+                    }
+                    user.Positionid = position.Id;
+                }
+
+                // Cập nhật Department nếu có
+                if (!string.IsNullOrEmpty(updateDto.DepartmentName))
+                {
+                    var department = await _context.Departments.FirstOrDefaultAsync(d => d.Name == updateDto.DepartmentName);
+                    if (department == null)
+                    {
+                        return BadRequest($"Không tìm thấy department: {updateDto.DepartmentName}");
+                    }
+                    user.Departmentid = department.Id;
+                }
+
+                // Cập nhật các thông tin khác nếu có
+                if (!string.IsNullOrEmpty(updateDto.Fullname))
+                {
+                    user.Fullname = updateDto.Fullname;
+                }
+
+                if (!string.IsNullOrEmpty(updateDto.Email))
+                {
+                    // Kiểm tra email đã được sử dụng bởi user khác chưa
+                    var existingEmail = await _context.Users
+                        .FirstOrDefaultAsync(u => u.Email == updateDto.Email && u.Id != id);
+                    if (existingEmail != null)
+                    {
+                        return BadRequest("Email đã được sử dụng bởi user khác");
+                    }
+                    user.Email = updateDto.Email;
+                }
+
+                if (updateDto.Phone != null)
+                {
+                    user.Phone = updateDto.Phone;
+                }
+
+                if (updateDto.IsActive.HasValue)
+                {
+                    user.Isactive = updateDto.IsActive.Value;
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Load lại related data để trả về đầy đủ
+                await _context.Entry(user)
+                    .Reference(u => u.Role)
+                    .LoadAsync();
+                await _context.Entry(user)
+                    .Reference(u => u.Department)
+                    .LoadAsync();
+                await _context.Entry(user)
+                    .Reference(u => u.Position)
+                    .LoadAsync();
+
+                var response = new UserResponseDto
+                {
+                    Id = user.Id,
+                    Username = user.Username,
+                    Fullname = user.Fullname,
+                    Email = user.Email,
+                    Phone = user.Phone,
+                    RoleName = user.Role?.Rolename,
+                    DepartmentName = user.Department?.Name,
+                    PositionName = user.Position?.Titlename,
+                    IsActive = user.Isactive,
+                    CreatedAt = user.Createdat
+                };
+
+                _logger.LogInformation("Admin đã cập nhật thông tin user {Id} ({Username})", user.Id, user.Username);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi cập nhật thông tin user {Id}", id);
+                return StatusCode(500, "Lỗi server khi cập nhật dữ liệu");
             }
         }
 
@@ -322,6 +593,50 @@ namespace HRMCyberse.Controllers
             {
                 _logger.LogError(ex, "Lỗi khi đăng xuất");
                 return StatusCode(500, "Lỗi server khi đăng xuất");
+            }
+        }
+
+        [HttpPost("refresh")]
+        [Authorize]
+        public async Task<ActionResult> RefreshToken()
+        {
+            try
+            {
+                // Lấy thông tin user từ token hiện tại
+                var userIdClaim = User.FindFirst("UserId")?.Value;
+                if (!int.TryParse(userIdClaim, out int userId))
+                {
+                    return Unauthorized(new { message = "Token không hợp lệ" });
+                }
+
+                // Lấy thông tin user từ database
+                var user = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.Department)
+                    .Include(u => u.Position)
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+                if (user == null || user.Isactive != true)
+                {
+                    return Unauthorized(new { message = "User không tồn tại hoặc đã bị khóa" });
+                }
+
+                // Generate token mới
+                var newToken = _jwtService.GenerateToken(user);
+
+                _logger.LogInformation("Refreshed token for user: {Username}", user.Username);
+
+                return Ok(new
+                {
+                    success = true,
+                    accessToken = newToken,
+                    message = "Token đã được làm mới"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi refresh token");
+                return StatusCode(500, "Lỗi server khi refresh token");
             }
         }
 

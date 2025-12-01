@@ -29,6 +29,45 @@ namespace HRMCyberse.Controllers
         }
 
         /// <summary>
+        /// Retrieves all work shifts in the system (Public endpoint for testing).
+        /// </summary>
+        /// <returns>A list of all work shifts with their details</returns>
+        /// <response code="200">Returns the list of shifts</response>
+        /// <response code="500">If there was an internal server error</response>
+        [HttpGet("public")]
+        [AllowAnonymous] // Allow access without authentication for testing
+        [ProducesResponseType(typeof(IEnumerable<ShiftDto>), 200)]
+        [ProducesResponseType(500)]
+        public async Task<ActionResult<IEnumerable<ShiftDto>>> GetAllShiftsPublic()
+        {
+            using var activity = new System.Diagnostics.Activity("GetAllShiftsPublic").Start();
+            activity?.SetTag("operation", "get_all_shifts_public");
+            
+            try
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var shifts = await _shiftService.GetAllShiftsAsync();
+                stopwatch.Stop();
+                
+                activity?.SetTag("shift_count", shifts.Count().ToString());
+                activity?.SetTag("duration_ms", stopwatch.ElapsedMilliseconds.ToString());
+                
+                _logger.LogInformation("Retrieved {Count} shifts (public) in {ElapsedMs}ms", 
+                    shifts.Count(), stopwatch.ElapsedMilliseconds);
+                
+                Response.Headers["Cache-Control"] = "public, max-age=300";
+                
+                return Ok(shifts);
+            }
+            catch (Exception ex)
+            {
+                activity?.SetTag("error", "true");
+                _logger.LogError(ex, "Error retrieving shifts (public)");
+                return StatusCode(500, "Lỗi server khi lấy danh sách ca làm việc");
+            }
+        }
+
+        /// <summary>
         /// Retrieves all work shifts in the system.
         /// </summary>
         /// <returns>A list of all work shifts with their details</returns>
@@ -37,7 +76,7 @@ namespace HRMCyberse.Controllers
         /// <response code="403">If the user doesn't have Admin or Manager role</response>
         /// <response code="500">If there was an internal server error</response>
         [HttpGet]
-        [ShiftViewAssignmentsAuthorize] // Add proper authorization
+        [Authorize] // Chỉ cần đăng nhập, không phân biệt role
         [ProducesResponseType(typeof(IEnumerable<ShiftDto>), 200)]
         [ProducesResponseType(401)]
         [ProducesResponseType(403)]
@@ -61,7 +100,8 @@ namespace HRMCyberse.Controllers
                     shifts.Count(), stopwatch.ElapsedMilliseconds);
                 
                 // Add cache headers for client-side caching
-                Response.Headers["Cache-Control"] = "public, max-age=300"; // 5 minutes
+                Response.Headers["Cache-Control"] = "public, max-age=60"; // 1 minute
+                Response.Headers["ETag"] = $"\"{shifts.GetHashCode()}\"";
                 
                 return Ok(shifts);
             }
@@ -323,8 +363,119 @@ namespace HRMCyberse.Controllers
         /// <response code="401">If the user is not authenticated</response>
         /// <response code="403">If the user doesn't have Admin or Manager role</response>
         /// <response code="500">If there was an internal server error</response>
+        /// <summary>
+        /// Debug endpoint to check raw assignment data
+        /// </summary>
+        [HttpGet("assignments/debug")]
+        [Authorize]
+        public async Task<ActionResult> GetAssignmentsDebug()
+        {
+            try
+            {
+                var assignments = await _shiftService.GetAllAssignmentsAsync();
+                var totalCount = assignments.Count();
+                
+                var debugInfo = new
+                {
+                    totalAssignments = totalCount,
+                    assignments = assignments.Select(a => new
+                    {
+                        a.Id,
+                        a.UserId,
+                        a.UserName,
+                        a.FullName,
+                        a.ShiftId,
+                        a.ShiftName,
+                        ShiftDate = a.ShiftDate.ToString("yyyy-MM-dd"),
+                        a.Status,
+                        CreatedAt = a.CreatedAt?.ToString("yyyy-MM-dd HH:mm:ss")
+                    }).ToList()
+                };
+                
+                return Ok(debugInfo);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Retrieves all shift assignments as a simple list with optional date filtering
+        /// </summary>
+        /// <param name="fromDate">Optional start date filter (YYYY-MM-DD)</param>
+        /// <param name="toDate">Optional end date filter (YYYY-MM-DD)</param>
+        /// <param name="date">Optional specific date filter (YYYY-MM-DD)</param>
+        /// <returns>Complete list of shift assignments</returns>
+        /// <response code="200">Returns the list of shift assignments</response>
+        /// <response code="401">If the user is not authenticated</response>
+        /// <response code="500">If there was an internal server error</response>
+        /// <example>
+        /// GET /api/shifts/assignments/list?date=2024-12-25
+        /// GET /api/shifts/assignments/list?fromDate=2024-12-01&toDate=2024-12-31
+        /// </example>
+        [HttpGet("assignments/list")]
+        [Authorize] // Tất cả user có thể xem
+        [ProducesResponseType(typeof(IEnumerable<UserShiftDto>), 200)]
+        [ProducesResponseType(401)]
+        [ProducesResponseType(500)]
+        public async Task<ActionResult<IEnumerable<UserShiftDto>>> GetAssignmentsList(
+            [FromQuery] DateOnly? fromDate = null,
+            [FromQuery] DateOnly? toDate = null,
+            [FromQuery] DateOnly? date = null)
+        {
+            try
+            {
+                var assignments = await _shiftService.GetAllAssignmentsAsync();
+                var totalCount = assignments.Count();
+                
+                _logger.LogInformation("Total assignments before filtering: {Count}", totalCount);
+                
+                // Apply date filtering
+                if (date.HasValue)
+                {
+                    // Nếu có date cụ thể, chỉ lấy assignments của ngày đó
+                    assignments = assignments.Where(a => a.ShiftDate == date.Value);
+                    _logger.LogInformation("Filtering by date: {Date}", date.Value.ToString("yyyy-MM-dd"));
+                }
+                else
+                {
+                    // Nếu không có date cụ thể, áp dụng fromDate và toDate
+                    if (fromDate.HasValue)
+                    {
+                        assignments = assignments.Where(a => a.ShiftDate >= fromDate.Value);
+                        _logger.LogInformation("Filtering from date: {FromDate}", fromDate.Value.ToString("yyyy-MM-dd"));
+                    }
+                    
+                    if (toDate.HasValue)
+                    {
+                        assignments = assignments.Where(a => a.ShiftDate <= toDate.Value);
+                        _logger.LogInformation("Filtering to date: {ToDate}", toDate.Value.ToString("yyyy-MM-dd"));
+                    }
+                }
+                
+                var result = assignments
+                    .OrderBy(a => a.ShiftDate)
+                    .ThenBy(a => a.ShiftStartTime)
+                    .ThenBy(a => a.FullName)
+                    .ToList();
+                
+                _logger.LogInformation("Retrieved {Count} assignments after filtering", result.Count);
+                
+                // Add cache headers
+                Response.Headers["Cache-Control"] = "public, max-age=30"; // 30 seconds
+                
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving assignments list");
+                return StatusCode(500, "Lỗi server khi lấy danh sách phân công");
+            }
+        }
+
         [HttpGet("assignments")]
-        [ShiftViewAssignmentsAuthorize]
+        [Authorize] // Tất cả user có thể xem
         [ProducesResponseType(typeof(IEnumerable<UserShiftDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -394,14 +545,15 @@ namespace HRMCyberse.Controllers
         /// Assigns a work shift to an employee for a specific date.
         /// </summary>
         /// <param name="assignShiftDto">The assignment data</param>
-        /// <returns>The created shift assignment</returns>
-        /// <response code="201">Returns the newly created assignment</response>
+        /// <param name="returnList">If true, returns all assignments after creating. If false, returns only the created assignment.</param>
+        /// <returns>The created shift assignment or all assignments</returns>
+        /// <response code="201">Returns the newly created assignment or all assignments</response>
         /// <response code="400">If the assignment data is invalid, user/shift doesn't exist, or assignment already exists</response>
         /// <response code="401">If the user is not authenticated</response>
         /// <response code="403">If the user doesn't have Admin or Manager role</response>
         /// <response code="500">If there was an internal server error</response>
         /// <example>
-        /// POST /api/shifts/assign
+        /// POST /api/shifts/assign?returnList=true
         /// {
         ///     "userId": 5,
         ///     "shiftId": 1,
@@ -412,11 +564,12 @@ namespace HRMCyberse.Controllers
         [HttpPost("assign")]
         [ShiftAssignAuthorize]
         [ProducesResponseType(typeof(UserShiftDto), 201)]
+        [ProducesResponseType(typeof(object), 201)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
         [ProducesResponseType(403)]
         [ProducesResponseType(500)]
-        public async Task<ActionResult<UserShiftDto>> AssignShift(AssignShiftDto assignShiftDto)
+        public async Task<ActionResult> AssignShift(AssignShiftDto assignShiftDto, [FromQuery] bool returnList = false)
         {
             try
             {
@@ -448,7 +601,21 @@ namespace HRMCyberse.Controllers
                 
                 _logger.LogInformation("Assigned shift {ShiftId} to user {UserId} by {AssignedBy}", 
                     assignShiftDto.ShiftId, assignShiftDto.UserId, assignedBy);
+
+                // Nếu yêu cầu trả về list, lấy tất cả assignments
+                if (returnList)
+                {
+                    var allAssignments = await _shiftService.GetAllAssignmentsAsync();
+                    return Ok(new
+                    {
+                        success = true,
+                        message = "Phân công ca thành công",
+                        newAssignment = assignment,
+                        assignments = allAssignments.ToList()
+                    });
+                }
                 
+                // Mặc định chỉ trả về assignment vừa tạo
                 return CreatedAtAction(nameof(GetAssignmentById), new { id = assignment.Id }, assignment);
             }
             catch (Exception ex)
@@ -458,6 +625,8 @@ namespace HRMCyberse.Controllers
                 return StatusCode(500, "Lỗi server khi phân công ca làm việc");
             }
         }
+
+
 
         /// <summary>
         /// Retrieves a specific shift assignment by its ID.
@@ -569,7 +738,7 @@ namespace HRMCyberse.Controllers
         /// GET /api/shifts/my-schedule?fromDate=2024-12-01&amp;toDate=2024-12-31&amp;sortBy=ShiftDate&amp;ascending=true
         /// </example>
         [HttpGet("my-schedule")]
-        [ViewPersonalScheduleAuthorize]
+        [Authorize] // Chỉ cần đăng nhập
         [ProducesResponseType(typeof(IEnumerable<UserShiftDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -644,7 +813,7 @@ namespace HRMCyberse.Controllers
         /// GET /api/shifts/user/5/schedule?fromDate=2024-12-01&amp;toDate=2024-12-31
         /// </example>
         [HttpGet("user/{userId}/schedule")]
-        [ShiftViewAssignmentsAuthorize]
+        [Authorize(Roles = "Admin,Manager")] // Chỉ Admin/Manager
         [ProducesResponseType(typeof(IEnumerable<UserShiftDto>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]

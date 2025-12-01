@@ -39,25 +39,31 @@ namespace HRMCyberse.Attributes
 
             if (string.IsNullOrEmpty(userRole) || !int.TryParse(userIdClaim, out int userId))
             {
-                context.Result = new ForbidResult("Thông tin xác thực không hợp lệ");
+                context.Result = new ForbidResult();
                 return;
             }
 
-            // Kiểm tra role cơ bản
-            if (!_allowedRoles.Contains(userRole))
+            // Kiểm tra role cơ bản (ignore case)
+            if (!_allowedRoles.Any(r => r.Equals(userRole, StringComparison.OrdinalIgnoreCase)))
             {
-                context.Result = new ForbidResult($"Không có quyền thực hiện thao tác '{_operation}'. Cần quyền: {string.Join(" hoặc ", _allowedRoles)}");
+                context.Result = new ObjectResult(new 
+                { 
+                    message = $"Không có quyền thực hiện thao tác '{_operation}'. Cần quyền: {string.Join(" hoặc ", _allowedRoles)}" 
+                })
+                {
+                    StatusCode = 403
+                };
                 return;
             }
 
-            // Nếu là Admin, cho phép tất cả
-            if (userRole == Roles.Admin)
+            // Nếu là Admin, cho phép tất cả (ignore case)
+            if (userRole.Equals(Roles.Admin, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            // Nếu yêu cầu kiểm tra department và user là Manager
-            if (_requireSameDepartment && userRole == Roles.Manager)
+            // Nếu yêu cầu kiểm tra department và user là Manager (ignore case)
+            if (_requireSameDepartment && userRole.Equals(Roles.Manager, StringComparison.OrdinalIgnoreCase))
             {
                 var dbContext = context.HttpContext.RequestServices.GetRequiredService<CybersehrmContext>();
                 
@@ -69,7 +75,10 @@ namespace HRMCyberse.Attributes
 
                 if (manager?.Departmentid == null)
                 {
-                    context.Result = new ForbidResult("Manager chưa được phân công department");
+                    context.Result = new ObjectResult(new { message = "Manager chưa được phân công department" })
+                    {
+                        StatusCode = 403
+                    };
                     return;
                 }
 
@@ -116,7 +125,7 @@ namespace HRMCyberse.Attributes
     /// </summary>
     public class ShiftViewAssignmentsAuthorizeAttribute : ShiftManagementAuthorizeAttribute
     {
-        public ShiftViewAssignmentsAuthorizeAttribute() : base("Xem phân công ca làm việc", true, Roles.Admin, Roles.Manager) { }
+        public ShiftViewAssignmentsAuthorizeAttribute() : base("Xem phân công ca làm việc", false, Roles.Admin, Roles.Manager, Roles.Employee) { }
     }
 
     /// <summary>

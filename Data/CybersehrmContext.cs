@@ -60,6 +60,8 @@ public partial class CybersehrmContext : DbContext
 
     public virtual DbSet<Usershift> Usershifts { get; set; }
 
+    public virtual DbSet<WeeklyscheduleRequest> WeeklyscheduleRequests { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseNpgsql("Host=dpg-d415mvbe5dus738lqdgg-a.oregon-postgres.render.com;Port=5432;Database=cybersehrm;Username=cybersehrm_user;Password=tL34pBRebfa8gGmYUp1WVAI1nh9ouh2u;SSL Mode=Require;");
@@ -700,6 +702,39 @@ public partial class CybersehrmContext : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.Usershifts)
                 .HasForeignKey(d => d.Userid)
                 .HasConstraintName("usershifts_userid_fkey");
+        });
+
+        // Configure WeeklyscheduleRequest relationships
+        modelBuilder.Entity<WeeklyscheduleRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.ToTable("weeklyschedule_requests");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Userid).HasColumnName("userid");
+            entity.Property(e => e.WeekStartDate).HasColumnName("week_start_date");
+            entity.Property(e => e.WeekEndDate).HasColumnName("week_end_date");
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
+            entity.Property(e => e.AvailabilityData).HasColumnName("availability_data").HasColumnType("jsonb");
+            entity.Property(e => e.Note).HasColumnName("note");
+            entity.Property(e => e.ReviewedBy).HasColumnName("reviewed_by");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            // Configure User relationship (creator)
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.Userid)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("weeklyschedule_requests_userid_fkey");
+
+            // Configure ReviewedBy relationship
+            entity.HasOne(d => d.ReviewedByNavigation)
+                .WithMany()
+                .HasForeignKey(d => d.ReviewedBy)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("weeklyschedule_requests_reviewed_by_fkey");
         });
 
         OnModelCreatingPartial(modelBuilder);

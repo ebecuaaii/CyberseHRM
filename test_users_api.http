@@ -1,0 +1,57 @@
+### HRM Cyberse - Test Users API
+### File này có thể dùng với REST Client extension trong VS Code
+### Hoặc copy vào Postman/Insomnia
+
+@baseUrl = http://localhost:5267/api
+@token = 
+
+### 1. Login - Lấy JWT Token
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "username": "admin",
+    "password": "123456"
+}
+
+### Lưu token từ response vào biến @token ở trên
+
+### 2. Get All Users - Lấy danh sách nhân viên (KIỂM TRA ROLE VÀ POSITION)
+GET {{baseUrl}}/auth/users
+Authorization: Bearer {{token}}
+
+### Response mong đợi có các field:
+### - roleName (camelCase)
+### - positionName (camelCase)  
+### - departmentName (camelCase)
+### Nếu không thấy, kiểm tra lại code hoặc chạy endpoint debug bên dưới
+
+### 3. Get Users Debug - Chi tiết debug
+GET {{baseUrl}}/auth/users/debug
+Authorization: Bearer {{token}}
+
+### 4. Fix User Data - Gán Role/Position mặc định
+POST {{baseUrl}}/auth/users/fix-data
+Authorization: Bearer {{token}}
+
+### 5. Get User By ID
+GET {{baseUrl}}/auth/user/1
+Authorization: Bearer {{token}}
+
+### 6. Update User - Admin gán Role/Position/Department (CHỈ ADMIN)
+PUT {{baseUrl}}/auth/user/9
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "roleName": "Employee",
+    "positionName": "Nhân viên",
+    "departmentName": "Pha chế"
+}
+
+### Lưu ý: 
+### - Chỉ Admin mới được phép update
+### - Có thể chỉ gửi các field cần update (không cần gửi tất cả)
+### - roleName, positionName, departmentName phải tồn tại trong database
+### - Có thể update: fullname, email, phone, isActive
+

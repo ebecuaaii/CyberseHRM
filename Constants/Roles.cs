@@ -2,9 +2,9 @@ namespace HRMCyberse.Constants
 {
     public static class Roles
     {
-        public const string Admin = "admin";
-        public const string Manager = "manager";
-        public const string Employee = "employee";
+        public const string Admin = "Admin";
+        public const string Manager = "Manager";
+        public const string Employee = "Employee";
         
         public static readonly string[] All = { Admin, Manager, Employee };
         

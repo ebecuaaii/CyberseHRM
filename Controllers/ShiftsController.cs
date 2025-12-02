@@ -723,6 +723,51 @@ namespace HRMCyberse.Controllers
             }
         }      
         /// <summary>
+        /// Get today's shift assignment for current user
+        /// </summary>
+        [HttpGet("my-shift-today")]
+        [Authorize]
+        [ProducesResponseType(typeof(UserShiftDto), 200)]
+        [ProducesResponseType(401)]
+        [ProducesResponseType(500)]
+        public async Task<ActionResult> GetMyShiftToday()
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst("UserId")?.Value;
+                if (!int.TryParse(userIdClaim, out int userId))
+                {
+                    return BadRequest("Không thể xác định người dùng");
+                }
+
+                var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                var assignment = await _shiftService.GetUserAssignmentsAsync(userId);
+                
+                var todayShift = assignment.FirstOrDefault(a => a.ShiftDate == today);
+
+                if (todayShift == null)
+                {
+                    return Ok(new
+                    {
+                        hasShift = false,
+                        message = "Bạn không có ca làm việc hôm nay"
+                    });
+                }
+
+                return Ok(new
+                {
+                    hasShift = true,
+                    shift = todayShift
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting today's shift");
+                return StatusCode(500, "Lỗi server khi lấy ca làm việc");
+            }
+        }
+
+        /// <summary>
         /// Retrieves the current user's personal shift schedule.
         /// </summary>
         /// <param name="fromDate">Optional start date filter (YYYY-MM-DD format)</param>

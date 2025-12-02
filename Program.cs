@@ -69,6 +69,9 @@ namespace HRMCyberse
             builder.Services.AddScoped<IAttendanceService, AttendanceService>();
             builder.Services.AddScoped<IRequestService, RequestService>();
             builder.Services.AddScoped<IPayrollService, PayrollService>();
+            
+            // Face Recognition Service
+            builder.Services.AddHttpClient<IFaceRecognitionService, FaceRecognitionService>();
 
             // Configure JWT Authentication
             var jwtSettings = builder.Configuration.GetSection("JwtSettings");

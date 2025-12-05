@@ -13,5 +13,7 @@ public partial class Department
 
     public DateTime? Createdat { get; set; }
 
+    public virtual ICollection<EmployeeInvitation> EmployeeInvitations { get; set; } = new List<EmployeeInvitation>();
+
     public virtual ICollection<User> Users { get; set; } = new List<User>();
 }

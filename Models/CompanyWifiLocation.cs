@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HRMCyberse.Models;
 
@@ -17,4 +18,8 @@ public partial class CompanyWifiLocation
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }
+
+    public int? BranchId { get; set; }
+
+    public virtual Branch? Branch { get; set; }
 }

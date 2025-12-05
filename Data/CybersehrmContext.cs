@@ -20,9 +20,17 @@ public partial class CybersehrmContext : DbContext
 
     public virtual DbSet<Attendance> Attendances { get; set; }
 
+    public virtual DbSet<AttendancePayroll> AttendancePayrolls { get; set; }
+
     public virtual DbSet<Attendanceimage> Attendanceimages { get; set; }
 
+    public virtual DbSet<Branch> Branches { get; set; }
+
+    public virtual DbSet<CompanyWifiLocation> CompanyWifiLocations { get; set; }
+
     public virtual DbSet<Department> Departments { get; set; }
+
+    public virtual DbSet<EmployeeInvitation> EmployeeInvitations { get; set; }
 
     public virtual DbSet<Holidaycalendar> Holidaycalendars { get; set; }
 
@@ -60,13 +68,16 @@ public partial class CybersehrmContext : DbContext
 
     public virtual DbSet<Usershift> Usershifts { get; set; }
 
+    public virtual DbSet<VAttendancePayrollDetail> VAttendancePayrollDetails { get; set; }
+
+    public virtual DbSet<VCurrentMonthSalary> VCurrentMonthSalaries { get; set; }
+
+    public virtual DbSet<VEmployeeMonthlySalary> VEmployeeMonthlySalaries { get; set; }
+
     public virtual DbSet<WeeklyscheduleRequest> WeeklyscheduleRequests { get; set; }
 
-    public virtual DbSet<CompanyWifiLocation> CompanyWifiLocations { get; set; }
-
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseNpgsql("Host=dpg-d415mvbe5dus738lqdgg-a.oregon-postgres.render.com;Port=5432;Database=cybersehrm;Username=cybersehrm_user;Password=tL34pBRebfa8gGmYUp1WVAI1nh9ouh2u;SSL Mode=Require;");
+        => optionsBuilder.UseNpgsql("Name=DefaultConnection");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -134,6 +145,78 @@ public partial class CybersehrmContext : DbContext
                 .HasConstraintName("attendance_userid_fkey");
         });
 
+        modelBuilder.Entity<AttendancePayroll>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("attendance_payroll_pkey");
+
+            entity.ToTable("attendance_payroll", tb => tb.HasComment("Chi tiết tính lương theo từng ca làm việc"));
+
+            entity.HasIndex(e => e.Attendanceid, "idx_attendance_payroll_attendance");
+
+            entity.HasIndex(e => e.Createdat, "idx_attendance_payroll_created");
+
+            entity.HasIndex(e => e.Shiftid, "idx_attendance_payroll_shift");
+
+            entity.HasIndex(e => e.Userid, "idx_attendance_payroll_user");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Attendanceid).HasColumnName("attendanceid");
+            entity.Property(e => e.Createdat)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("createdat");
+            entity.Property(e => e.Effectiverate)
+                .HasPrecision(12, 2)
+                .HasComment("Lương thực tế = basesalaryrate × shiftmultiplier")
+                .HasColumnName("effectiverate");
+            entity.Property(e => e.Hoursworked)
+                .HasPrecision(10, 2)
+                .HasComment("Số giờ làm thực tế")
+                .HasColumnName("hoursworked");
+            entity.Property(e => e.Overtimeamount)
+                .HasPrecision(12, 2)
+                .HasComment("overtimehours × overtimerate")
+                .HasColumnName("overtimeamount");
+            entity.Property(e => e.Overtimehours)
+                .HasPrecision(10, 2)
+                .HasComment("Giờ làm thêm (nếu có)")
+                .HasColumnName("overtimehours");
+            entity.Property(e => e.Overtimerate)
+                .HasPrecision(12, 2)
+                .HasComment("Lương OT (thường = effectiverate × 1.5)")
+                .HasColumnName("overtimerate");
+            entity.Property(e => e.Regularamount)
+                .HasPrecision(12, 2)
+                .HasComment("hoursworked × effectiverate")
+                .HasColumnName("regularamount");
+            entity.Property(e => e.Salaryrate)
+                .HasPrecision(12, 2)
+                .HasComment("Lương cơ bản theo giờ của nhân viên")
+                .HasColumnName("salaryrate");
+            entity.Property(e => e.Shiftid).HasColumnName("shiftid");
+            entity.Property(e => e.Shiftmultiplier)
+                .HasPrecision(5, 2)
+                .HasComment("Hệ số nhân cho ca (1.0 = ca thường, 1.5 = ca đêm, 2.0 = ngày lễ)")
+                .HasColumnName("shiftmultiplier");
+            entity.Property(e => e.Totalamount)
+                .HasPrecision(12, 2)
+                .HasComment("regularamount + overtimeamount")
+                .HasColumnName("totalamount");
+            entity.Property(e => e.Userid).HasColumnName("userid");
+
+            entity.HasOne(d => d.Attendance).WithMany(p => p.AttendancePayrolls)
+                .HasForeignKey(d => d.Attendanceid)
+                .HasConstraintName("attendance_payroll_attendanceid_fkey");
+
+            entity.HasOne(d => d.Shift).WithMany(p => p.AttendancePayrolls)
+                .HasForeignKey(d => d.Shiftid)
+                .HasConstraintName("attendance_payroll_shiftid_fkey");
+
+            entity.HasOne(d => d.User).WithMany(p => p.AttendancePayrolls)
+                .HasForeignKey(d => d.Userid)
+                .HasConstraintName("attendance_payroll_userid_fkey");
+        });
+
         modelBuilder.Entity<Attendanceimage>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("attendanceimages_pkey");
@@ -152,6 +235,76 @@ public partial class CybersehrmContext : DbContext
                 .HasConstraintName("attendanceimages_attendanceid_fkey");
         });
 
+        modelBuilder.Entity<Branch>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("branches_pkey");
+
+            entity.ToTable("branches", tb => tb.HasComment("Company branches/locations"));
+
+            entity.HasIndex(e => e.BranchCode, "branches_branch_code_key").IsUnique();
+
+            entity.HasIndex(e => e.IsActive, "idx_branches_active");
+
+            entity.HasIndex(e => e.BranchCode, "idx_branches_code");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.BranchCode)
+                .HasMaxLength(20)
+                .HasColumnName("branch_code");
+            entity.Property(e => e.BranchName)
+                .HasMaxLength(100)
+                .HasColumnName("branch_name");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+            entity.Property(e => e.LocationAddress).HasColumnName("location_address");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<CompanyWifiLocation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("companywifilocations_pkey");
+
+            entity.ToTable("companywifilocations");
+
+            entity.HasIndex(e => e.BranchId, "idx_wifi_branch");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.BranchId).HasColumnName("branch_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("createdat");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("isactive");
+            entity.Property(e => e.LocationName)
+                .HasMaxLength(200)
+                .HasColumnName("locationname");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updatedat");
+            entity.Property(e => e.WifiBssid)
+                .HasMaxLength(50)
+                .HasColumnName("wifibssid");
+            entity.Property(e => e.WifiSsid)
+                .HasMaxLength(100)
+                .HasColumnName("wifissid");
+
+            entity.HasOne(d => d.Branch).WithMany(p => p.CompanyWifiLocations)
+                .HasForeignKey(d => d.BranchId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("companywifilocations_branch_id_fkey");
+        });
+
         modelBuilder.Entity<Department>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("departments_pkey");
@@ -166,6 +319,70 @@ public partial class CybersehrmContext : DbContext
             entity.Property(e => e.Name)
                 .HasMaxLength(100)
                 .HasColumnName("name");
+        });
+
+        modelBuilder.Entity<EmployeeInvitation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("employee_invitations_pkey");
+
+            entity.ToTable("employee_invitations", tb => tb.HasComment("Employee invitation system with pre-configured details"));
+
+            entity.HasIndex(e => e.InvitationToken, "employee_invitations_invitation_token_key").IsUnique();
+
+            entity.HasIndex(e => e.BranchId, "idx_invitations_branch");
+
+            entity.HasIndex(e => e.Email, "idx_invitations_email");
+
+            entity.HasIndex(e => e.InvitationToken, "idx_invitations_token");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.BranchId).HasColumnName("branch_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+            entity.Property(e => e.Departmentid).HasColumnName("departmentid");
+            entity.Property(e => e.Email)
+                .HasMaxLength(100)
+                .HasColumnName("email");
+            entity.Property(e => e.ExpiresAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("expires_at");
+            entity.Property(e => e.InvitationToken)
+                .HasMaxLength(255)
+                .HasColumnName("invitation_token");
+            entity.Property(e => e.IsUsed)
+                .HasDefaultValue(false)
+                .HasColumnName("is_used");
+            entity.Property(e => e.Positionid).HasColumnName("positionid");
+            entity.Property(e => e.Roleid).HasColumnName("roleid");
+            entity.Property(e => e.Salaryrate)
+                .HasPrecision(10, 2)
+                .HasColumnName("salaryrate");
+            entity.Property(e => e.UsedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("used_at");
+
+            entity.HasOne(d => d.Branch).WithMany(p => p.EmployeeInvitations)
+                .HasForeignKey(d => d.BranchId)
+                .HasConstraintName("employee_invitations_branch_id_fkey");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.EmployeeInvitations)
+                .HasForeignKey(d => d.CreatedBy)
+                .HasConstraintName("employee_invitations_created_by_fkey");
+
+            entity.HasOne(d => d.Department).WithMany(p => p.EmployeeInvitations)
+                .HasForeignKey(d => d.Departmentid)
+                .HasConstraintName("employee_invitations_departmentid_fkey");
+
+            entity.HasOne(d => d.Position).WithMany(p => p.EmployeeInvitations)
+                .HasForeignKey(d => d.Positionid)
+                .HasConstraintName("employee_invitations_positionid_fkey");
+
+            entity.HasOne(d => d.Role).WithMany(p => p.EmployeeInvitations)
+                .HasForeignKey(d => d.Roleid)
+                .HasConstraintName("employee_invitations_roleid_fkey");
         });
 
         modelBuilder.Entity<Holidaycalendar>(entity =>
@@ -194,27 +411,32 @@ public partial class CybersehrmContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("laterequests_pkey");
 
-            entity.ToTable("laterequests");
+            entity.ToTable("laterequests", tb => tb.HasComment("Stores employee late arrival requests"));
 
-            entity.HasIndex(e => e.Userid, "idx_laterequests_userid");
-            entity.HasIndex(e => e.Status, "idx_laterequests_status");
             entity.HasIndex(e => e.Requestdate, "idx_laterequests_requestdate");
 
+            entity.HasIndex(e => e.Status, "idx_laterequests_status");
+
+            entity.HasIndex(e => e.Userid, "idx_laterequests_userid");
+
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Userid).HasColumnName("userid");
-            entity.Property(e => e.Shiftid).HasColumnName("shiftid");
-            entity.Property(e => e.Requestdate).HasColumnName("requestdate");
-            entity.Property(e => e.Expectedarrivaltime).HasColumnName("expectedarrivaltime");
-            entity.Property(e => e.Reason).HasColumnName("reason");
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'Pending'::character varying")
-                .HasColumnName("status");
-            entity.Property(e => e.Reviewedby).HasColumnName("reviewedby");
-            entity.Property(e => e.Reviewedat).HasColumnName("reviewedat");
             entity.Property(e => e.Createdat)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("createdat");
+            entity.Property(e => e.Expectedarrivaltime)
+                .HasComment("Expected time of arrival when requesting to be late")
+                .HasColumnName("expectedarrivaltime");
+            entity.Property(e => e.Reason).HasColumnName("reason");
+            entity.Property(e => e.Requestdate).HasColumnName("requestdate");
+            entity.Property(e => e.Reviewedat).HasColumnName("reviewedat");
+            entity.Property(e => e.Reviewedby).HasColumnName("reviewedby");
+            entity.Property(e => e.Shiftid).HasColumnName("shiftid");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'Pending'::character varying")
+                .HasComment("Request status: Pending, Approved, Rejected, Cancelled")
+                .HasColumnName("status");
+            entity.Property(e => e.Userid).HasColumnName("userid");
 
             entity.HasOne(d => d.ReviewedbyNavigation).WithMany(p => p.LaterequestReviewedbyNavigations)
                 .HasForeignKey(d => d.Reviewedby)
@@ -294,6 +516,10 @@ public partial class CybersehrmContext : DbContext
 
             entity.ToTable("payroll");
 
+            entity.HasIndex(e => e.IsFinalized, "idx_payroll_finalized");
+
+            entity.HasIndex(e => new { e.Userid, e.Month, e.Year }, "idx_payroll_user_month");
+
             entity.HasIndex(e => new { e.Userid, e.Month, e.Year }, "idx_usersalary_user_month");
 
             entity.HasIndex(e => new { e.Userid, e.Month, e.Year }, "payroll_userid_month_year_key").IsUnique();
@@ -310,6 +536,12 @@ public partial class CybersehrmContext : DbContext
             entity.Property(e => e.Createdat)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("createdat");
+            entity.Property(e => e.FinalizedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("finalized_at");
+            entity.Property(e => e.IsFinalized)
+                .HasDefaultValue(false)
+                .HasColumnName("is_finalized");
             entity.Property(e => e.Month).HasColumnName("month");
             entity.Property(e => e.Netsalary)
                 .HasPrecision(12, 2)
@@ -319,6 +551,9 @@ public partial class CybersehrmContext : DbContext
                 .HasPrecision(12, 2)
                 .HasDefaultValueSql("0")
                 .HasColumnName("penalties");
+            entity.Property(e => e.Salaryrate)
+                .HasPrecision(12, 2)
+                .HasColumnName("salaryrate");
             entity.Property(e => e.Totalhours)
                 .HasPrecision(10, 2)
                 .HasDefaultValueSql("0")
@@ -617,6 +852,8 @@ public partial class CybersehrmContext : DbContext
 
             entity.ToTable("users");
 
+            entity.HasIndex(e => e.BranchId, "idx_users_branch");
+
             entity.HasIndex(e => e.Departmentid, "idx_users_department");
 
             entity.HasIndex(e => e.Roleid, "idx_users_role");
@@ -627,6 +864,7 @@ public partial class CybersehrmContext : DbContext
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Avatarurl).HasColumnName("avatarurl");
+            entity.Property(e => e.BranchId).HasColumnName("branch_id");
             entity.Property(e => e.Createdat)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("createdat");
@@ -658,6 +896,11 @@ public partial class CybersehrmContext : DbContext
             entity.Property(e => e.Username)
                 .HasMaxLength(50)
                 .HasColumnName("username");
+
+            entity.HasOne(d => d.Branch).WithMany(p => p.Users)
+                .HasForeignKey(d => d.BranchId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("users_branch_id_fkey");
 
             entity.HasOne(d => d.Department).WithMany(p => p.Users)
                 .HasForeignKey(d => d.Departmentid)
@@ -706,37 +949,155 @@ public partial class CybersehrmContext : DbContext
                 .HasConstraintName("usershifts_userid_fkey");
         });
 
-        // Configure WeeklyscheduleRequest relationships
+        modelBuilder.Entity<VAttendancePayrollDetail>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("v_attendance_payroll_details");
+
+            entity.Property(e => e.Attendanceid).HasColumnName("attendanceid");
+            entity.Property(e => e.BranchId).HasColumnName("branch_id");
+            entity.Property(e => e.BranchName)
+                .HasMaxLength(100)
+                .HasColumnName("branch_name");
+            entity.Property(e => e.Checkintime).HasColumnName("checkintime");
+            entity.Property(e => e.Checkouttime).HasColumnName("checkouttime");
+            entity.Property(e => e.Createdat)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("createdat");
+            entity.Property(e => e.Effectiverate)
+                .HasPrecision(12, 2)
+                .HasColumnName("effectiverate");
+            entity.Property(e => e.Fullname)
+                .HasMaxLength(100)
+                .HasColumnName("fullname");
+            entity.Property(e => e.Hoursworked)
+                .HasPrecision(10, 2)
+                .HasColumnName("hoursworked");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name)
+                .HasMaxLength(50)
+                .HasColumnName("name");
+            entity.Property(e => e.Overtimeamount)
+                .HasPrecision(12, 2)
+                .HasColumnName("overtimeamount");
+            entity.Property(e => e.Overtimehours)
+                .HasPrecision(10, 2)
+                .HasColumnName("overtimehours");
+            entity.Property(e => e.Regularamount)
+                .HasPrecision(12, 2)
+                .HasColumnName("regularamount");
+            entity.Property(e => e.Salaryrate)
+                .HasPrecision(12, 2)
+                .HasColumnName("salaryrate");
+            entity.Property(e => e.Shiftmultiplier)
+                .HasPrecision(5, 2)
+                .HasColumnName("shiftmultiplier");
+            entity.Property(e => e.Totalamount)
+                .HasPrecision(12, 2)
+                .HasColumnName("totalamount");
+            entity.Property(e => e.Userid).HasColumnName("userid");
+        });
+
+        modelBuilder.Entity<VCurrentMonthSalary>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("v_current_month_salary");
+
+            entity.Property(e => e.AvgSalaryRate).HasColumnName("avg_salary_rate");
+            entity.Property(e => e.BranchId).HasColumnName("branch_id");
+            entity.Property(e => e.BranchName)
+                .HasMaxLength(100)
+                .HasColumnName("branch_name");
+            entity.Property(e => e.DaysWorked).HasColumnName("days_worked");
+            entity.Property(e => e.Email)
+                .HasMaxLength(100)
+                .HasColumnName("email");
+            entity.Property(e => e.Fullname)
+                .HasMaxLength(100)
+                .HasColumnName("fullname");
+            entity.Property(e => e.OvertimeSalary).HasColumnName("overtime_salary");
+            entity.Property(e => e.RegularSalary).HasColumnName("regular_salary");
+            entity.Property(e => e.TotalHours).HasColumnName("total_hours");
+            entity.Property(e => e.TotalOvertimeHours).HasColumnName("total_overtime_hours");
+            entity.Property(e => e.TotalSalary).HasColumnName("total_salary");
+            entity.Property(e => e.Userid).HasColumnName("userid");
+        });
+
+        modelBuilder.Entity<VEmployeeMonthlySalary>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("v_employee_monthly_salary");
+
+            entity.Property(e => e.AvgSalaryRate).HasColumnName("avg_salary_rate");
+            entity.Property(e => e.BranchId).HasColumnName("branch_id");
+            entity.Property(e => e.BranchName)
+                .HasMaxLength(100)
+                .HasColumnName("branch_name");
+            entity.Property(e => e.Fullname)
+                .HasMaxLength(100)
+                .HasColumnName("fullname");
+            entity.Property(e => e.Month).HasColumnName("month");
+            entity.Property(e => e.OvertimeSalary).HasColumnName("overtime_salary");
+            entity.Property(e => e.RegularSalary).HasColumnName("regular_salary");
+            entity.Property(e => e.TotalDaysWorked).HasColumnName("total_days_worked");
+            entity.Property(e => e.TotalHours).HasColumnName("total_hours");
+            entity.Property(e => e.TotalOvertimeHours).HasColumnName("total_overtime_hours");
+            entity.Property(e => e.TotalSalary).HasColumnName("total_salary");
+            entity.Property(e => e.Userid).HasColumnName("userid");
+            entity.Property(e => e.Year).HasColumnName("year");
+        });
+
         modelBuilder.Entity<WeeklyscheduleRequest>(entity =>
         {
-            entity.HasKey(e => e.Id);
-            entity.ToTable("weeklyschedule_requests");
+            entity.HasKey(e => e.Id).HasName("weeklyschedule_requests_pkey");
+
+            entity.ToTable("weeklyschedule_requests", tb => tb.HasComment("Yêu cầu đăng ký lịch làm việc theo tuần của nhân viên"));
+
+            entity.HasIndex(e => e.Status, "idx_weeklyschedule_status");
+
+            entity.HasIndex(e => e.Userid, "idx_weeklyschedule_userid");
+
+            entity.HasIndex(e => e.WeekStartDate, "idx_weeklyschedule_week");
+
+            entity.HasIndex(e => new { e.Userid, e.WeekStartDate }, "unique_user_week").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Userid).HasColumnName("userid");
-            entity.Property(e => e.WeekStartDate).HasColumnName("week_start_date");
-            entity.Property(e => e.WeekEndDate).HasColumnName("week_end_date");
-            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
-            entity.Property(e => e.AvailabilityData).HasColumnName("availability_data").HasColumnType("jsonb");
+            entity.Property(e => e.AvailabilityData)
+                .HasComment("JSON chứa thông tin ca có thể làm theo từng ngày trong tuần")
+                .HasColumnType("jsonb")
+                .HasColumnName("availability_data");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
             entity.Property(e => e.Note).HasColumnName("note");
+            entity.Property(e => e.ReviewedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("reviewed_at");
             entity.Property(e => e.ReviewedBy).HasColumnName("reviewed_by");
-            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at");
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
-            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'pending'::character varying")
+                .HasColumnName("status");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.Userid).HasColumnName("userid");
+            entity.Property(e => e.WeekEndDate).HasColumnName("week_end_date");
+            entity.Property(e => e.WeekStartDate).HasColumnName("week_start_date");
 
-            // Configure User relationship (creator)
-            entity.HasOne(d => d.User)
-                .WithMany()
-                .HasForeignKey(d => d.Userid)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("weeklyschedule_requests_userid_fkey");
-
-            // Configure ReviewedBy relationship
-            entity.HasOne(d => d.ReviewedByNavigation)
-                .WithMany()
+            entity.HasOne(d => d.ReviewedByNavigation).WithMany(p => p.WeeklyscheduleRequestReviewedByNavigations)
                 .HasForeignKey(d => d.ReviewedBy)
-                .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("weeklyschedule_requests_reviewed_by_fkey");
+
+            entity.HasOne(d => d.User).WithMany(p => p.WeeklyscheduleRequestUsers)
+                .HasForeignKey(d => d.Userid)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("weeklyschedule_requests_userid_fkey");
         });
 
         OnModelCreatingPartial(modelBuilder);

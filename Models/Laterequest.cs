@@ -1,8 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HRMCyberse.Models;
 
+/// <summary>
+/// Stores employee late arrival requests
+/// </summary>
 public partial class Laterequest
 {
     public int Id { get; set; }
@@ -13,10 +16,16 @@ public partial class Laterequest
 
     public DateOnly Requestdate { get; set; }
 
+    /// <summary>
+    /// Expected time of arrival when requesting to be late
+    /// </summary>
     public TimeOnly Expectedarrivaltime { get; set; }
 
     public string? Reason { get; set; }
 
+    /// <summary>
+    /// Request status: Pending, Approved, Rejected, Cancelled
+    /// </summary>
     public string? Status { get; set; }
 
     public int? Reviewedby { get; set; }

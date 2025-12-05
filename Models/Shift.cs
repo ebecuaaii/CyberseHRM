@@ -19,6 +19,8 @@ public partial class Shift
 
     public DateTime? Createdat { get; set; }
 
+    public virtual ICollection<AttendancePayroll> AttendancePayrolls { get; set; } = new List<AttendancePayroll>();
+
     public virtual ICollection<Attendance> Attendances { get; set; } = new List<Attendance>();
 
     public virtual User? CreatedbyNavigation { get; set; }

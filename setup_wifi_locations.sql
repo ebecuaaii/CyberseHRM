@@ -40,4 +40,32 @@ DELETE FROM companywifilocations WHERE id = 1;
 
 select * from usershifts where userid = 8;
 
-insert into usershifts VALUES ( 151, 8, 3, '02/12/2025', 'Assigned' );
+insert into
+    usershifts (
+        userid,
+        shiftid,
+        shiftdate,
+        status
+    )
+VALUES (
+        8,
+        3,
+        2025 -12 -02,
+        "assigned"
+    );
+
+INSERT INTO
+    usershifts (
+        userid,
+        shiftid,
+        shiftdate,
+        status
+    )
+VALUES (
+        8,
+        3,
+        '2025-12-02',
+        'assigned'
+    );
+
+select * from departments;

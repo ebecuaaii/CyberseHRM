@@ -33,11 +33,19 @@ public partial class User
 
     public DateTime? Createdat { get; set; }
 
+    public int? BranchId { get; set; }
+
     public virtual ICollection<Activitylog> Activitylogs { get; set; } = new List<Activitylog>();
+
+    public virtual ICollection<AttendancePayroll> AttendancePayrolls { get; set; } = new List<AttendancePayroll>();
 
     public virtual ICollection<Attendance> Attendances { get; set; } = new List<Attendance>();
 
+    public virtual Branch? Branch { get; set; }
+
     public virtual Department? Department { get; set; }
+
+    public virtual ICollection<EmployeeInvitation> EmployeeInvitations { get; set; } = new List<EmployeeInvitation>();
 
     public virtual ICollection<Laterequest> LaterequestReviewedbyNavigations { get; set; } = new List<Laterequest>();
 
@@ -78,4 +86,8 @@ public partial class User
     public virtual ICollection<Shift> Shifts { get; set; } = new List<Shift>();
 
     public virtual ICollection<Usershift> Usershifts { get; set; } = new List<Usershift>();
+
+    public virtual ICollection<WeeklyscheduleRequest> WeeklyscheduleRequestReviewedByNavigations { get; set; } = new List<WeeklyscheduleRequest>();
+
+    public virtual ICollection<WeeklyscheduleRequest> WeeklyscheduleRequestUsers { get; set; } = new List<WeeklyscheduleRequest>();
 }

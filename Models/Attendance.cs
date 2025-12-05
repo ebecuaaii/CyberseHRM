@@ -31,6 +31,8 @@ public partial class Attendance
 
     public string? Notes { get; set; }
 
+    public virtual ICollection<AttendancePayroll> AttendancePayrolls { get; set; } = new List<AttendancePayroll>();
+
     public virtual ICollection<Attendanceimage> Attendanceimages { get; set; } = new List<Attendanceimage>();
 
     public virtual Shift? Shift { get; set; }

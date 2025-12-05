@@ -25,6 +25,12 @@ public partial class Payroll
 
     public DateTime? Createdat { get; set; }
 
+    public decimal? Salaryrate { get; set; }
+
+    public bool? IsFinalized { get; set; }
+
+    public DateTime? FinalizedAt { get; set; }
+
     public virtual ICollection<Salarydetail> Salarydetails { get; set; } = new List<Salarydetail>();
 
     public virtual User User { get; set; } = null!;

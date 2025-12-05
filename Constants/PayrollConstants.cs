@@ -2,8 +2,9 @@ namespace HRMCyberse.Constants
 {
     public static class PayrollConstants
     {
-        public const decimal NightShiftBonus = 50000m; // 50,000 VND per night shift
-
+        // Note: NightShiftBonus is now configurable in appsettings.json under PayrollSettings
+        // Use IConfiguration or PayrollSettings to access the value
+        
         public static class RewardPenaltyType
         {
             public const string Reward = "Reward";

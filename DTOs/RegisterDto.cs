@@ -30,5 +30,8 @@ namespace HRMCyberse.DTOs
         public string? DepartmentName { get; set; }
         public string? PositionName { get; set; }
         public string? RoleName { get; set; }
+        
+        // Branch code để tự động match với invitation
+        public string? BranchCode { get; set; }
     }
 }

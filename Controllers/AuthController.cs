@@ -51,6 +51,38 @@ namespace HRMCyberse.Controllers
                     }
                 }
 
+                // Tìm invitation nếu có branchCode
+                EmployeeInvitation? invitation = null;
+                Branch? branch = null;
+                
+                if (!string.IsNullOrEmpty(registerDto.BranchCode))
+                {
+                    // Tìm branch từ code
+                    branch = await _context.Branches
+                        .FirstOrDefaultAsync(b => b.BranchCode == registerDto.BranchCode);
+                    
+                    if (branch == null)
+                    {
+                        return BadRequest($"Mã chi nhánh '{registerDto.BranchCode}' không tồn tại");
+                    }
+
+                    // Tìm invitation chưa sử dụng và chưa hết hạn cho email này
+                    invitation = await _context.EmployeeInvitations
+                        .Include(i => i.Role)
+                        .Include(i => i.Department)
+                        .Include(i => i.Position)
+                        .FirstOrDefaultAsync(i => 
+                            i.Email == registerDto.Email && 
+                            i.BranchId == branch.Id &&
+                            i.IsUsed == false && 
+                            i.ExpiresAt > DateTime.UtcNow);
+
+                    if (invitation == null)
+                    {
+                        return BadRequest("Không tìm thấy lời mời hợp lệ cho email và chi nhánh này");
+                    }
+                }
+
                 // Kiểm tra role có tồn tại không (nếu được cung cấp)
                 if (!string.IsNullOrEmpty(registerDto.RoleName))
                 {
@@ -81,7 +113,7 @@ namespace HRMCyberse.Controllers
                     }
                 }
 
-                // Tạo user mới - lưu name trực tiếp thay vì ID
+                // Tạo user mới
                 var user = new User
                 {
                     Username = registerDto.Username,
@@ -94,27 +126,43 @@ namespace HRMCyberse.Controllers
                     Hiredate = DateOnly.FromDateTime(DateTime.Now)
                 };
 
-                // Tìm và gán ID từ name (vì database vẫn cần ID)
-                if (!string.IsNullOrEmpty(registerDto.RoleName))
+                // Nếu có invitation, ưu tiên dùng thông tin từ invitation
+                if (invitation != null)
                 {
-                    var role = await _context.Roles.FirstOrDefaultAsync(r => r.Rolename == registerDto.RoleName);
-                    user.Roleid = role?.Id;
+                    user.BranchId = invitation.BranchId;
+                    user.Roleid = invitation.Roleid;
+                    user.Departmentid = invitation.Departmentid;
+                    user.Positionid = invitation.Positionid;
+                    user.Salaryrate = invitation.Salaryrate;
+
+                    // Đánh dấu invitation đã sử dụng
+                    invitation.IsUsed = true;
+                    invitation.UsedAt = DateTime.UtcNow;
                 }
                 else
                 {
-                    user.Roleid = 3; // Mặc định role user thường
-                }
+                    // Không có invitation, dùng thông tin từ registerDto
+                    if (!string.IsNullOrEmpty(registerDto.RoleName))
+                    {
+                        var role = await _context.Roles.FirstOrDefaultAsync(r => r.Rolename == registerDto.RoleName);
+                        user.Roleid = role?.Id;
+                    }
+                    else
+                    {
+                        user.Roleid = 3; // Mặc định role user thường
+                    }
 
-                if (!string.IsNullOrEmpty(registerDto.DepartmentName))
-                {
-                    var department = await _context.Departments.FirstOrDefaultAsync(d => d.Name == registerDto.DepartmentName);
-                    user.Departmentid = department?.Id;
-                }
+                    if (!string.IsNullOrEmpty(registerDto.DepartmentName))
+                    {
+                        var department = await _context.Departments.FirstOrDefaultAsync(d => d.Name == registerDto.DepartmentName);
+                        user.Departmentid = department?.Id;
+                    }
 
-                if (!string.IsNullOrEmpty(registerDto.PositionName))
-                {
-                    var position = await _context.Positiontitles.FirstOrDefaultAsync(p => p.Titlename == registerDto.PositionName);
-                    user.Positionid = position?.Id;
+                    if (!string.IsNullOrEmpty(registerDto.PositionName))
+                    {
+                        var position = await _context.Positiontitles.FirstOrDefaultAsync(p => p.Titlename == registerDto.PositionName);
+                        user.Positionid = position?.Id;
+                    }
                 }
 
                 _context.Users.Add(user);
@@ -698,6 +746,163 @@ namespace HRMCyberse.Controllers
             {
                 _logger.LogError(ex, "Lỗi khi kiểm tra hash");
                 return StatusCode(500, "Lỗi server");
+            }
+        }
+
+        /// <summary>
+        /// Lấy thông tin invitation từ token (không cần auth)
+        /// </summary>
+        [HttpGet("invitation/{token}")]
+        [AllowAnonymous]
+        public async Task<ActionResult<InvitationDetailsDto>> GetInvitationDetails(string token)
+        {
+            try
+            {
+                var invitation = await _context.EmployeeInvitations
+                    .Include(i => i.Branch)
+                    .Include(i => i.Role)
+                    .Include(i => i.Department)
+                    .Include(i => i.Position)
+                    .FirstOrDefaultAsync(i => i.InvitationToken == token);
+
+                if (invitation == null)
+                    return NotFound(new { message = "Lời mời không tồn tại" });
+
+                var isExpired = invitation.ExpiresAt <= DateTime.UtcNow;
+                var isUsed = invitation.IsUsed ?? false;
+
+                if (isUsed)
+                    return BadRequest(new { message = "Lời mời đã được sử dụng" });
+
+                if (isExpired)
+                    return BadRequest(new { message = "Lời mời đã hết hạn" });
+
+                var response = new InvitationDetailsDto
+                {
+                    Email = invitation.Email,
+                    BranchCode = invitation.Branch.BranchCode,
+                    BranchName = invitation.Branch.BranchName,
+                    RoleName = invitation.Role?.Rolename,
+                    DepartmentName = invitation.Department?.Name,
+                    PositionName = invitation.Position?.Titlename,
+                    SalaryRate = invitation.Salaryrate,
+                    ExpiresAt = invitation.ExpiresAt,
+                    IsExpired = isExpired,
+                    IsUsed = isUsed
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi lấy thông tin invitation");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi" });
+            }
+        }
+
+        /// <summary>
+        /// Chấp nhận lời mời và tạo tài khoản (không cần auth)
+        /// </summary>
+        [HttpPost("accept-invitation")]
+        [AllowAnonymous]
+        public async Task<ActionResult<LoginResponseDto>> AcceptInvitation(AcceptInvitationDto dto)
+        {
+            try
+            {
+                // Tìm invitation
+                var invitation = await _context.EmployeeInvitations
+                    .Include(i => i.Branch)
+                    .Include(i => i.Role)
+                    .Include(i => i.Department)
+                    .Include(i => i.Position)
+                    .FirstOrDefaultAsync(i => i.InvitationToken == dto.Token);
+
+                if (invitation == null)
+                    return NotFound(new { message = "Lời mời không tồn tại" });
+
+                if (invitation.IsUsed == true)
+                    return BadRequest(new { message = "Lời mời đã được sử dụng" });
+
+                if (invitation.ExpiresAt <= DateTime.UtcNow)
+                    return BadRequest(new { message = "Lời mời đã hết hạn" });
+
+                // Kiểm tra username đã tồn tại
+                var existingUser = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Username == dto.Username);
+                if (existingUser != null)
+                    return BadRequest(new { message = "Tên đăng nhập đã tồn tại" });
+
+                // Tạo user mới từ invitation
+                var user = new User
+                {
+                    Username = dto.Username,
+                    Passwordhash = _passwordService.HashPassword(dto.Password),
+                    Fullname = dto.FullName,
+                    Email = invitation.Email,
+                    Phone = dto.Phone,
+                    BranchId = invitation.BranchId,
+                    Roleid = invitation.Roleid,
+                    Departmentid = invitation.Departmentid,
+                    Positionid = invitation.Positionid,
+                    Salaryrate = invitation.Salaryrate,
+                    Hiredate = DateOnly.FromDateTime(DateTime.Now),
+                    Isactive = true,
+                    Createdat = DateTime.UtcNow
+                };
+
+                _context.Users.Add(user);
+
+                // Đánh dấu invitation đã sử dụng
+                invitation.IsUsed = true;
+                invitation.UsedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                // Load related data
+                await _context.Entry(user)
+                    .Reference(u => u.Branch)
+                    .LoadAsync();
+                await _context.Entry(user)
+                    .Reference(u => u.Role)
+                    .LoadAsync();
+                await _context.Entry(user)
+                    .Reference(u => u.Department)
+                    .LoadAsync();
+                await _context.Entry(user)
+                    .Reference(u => u.Position)
+                    .LoadAsync();
+
+                // Generate JWT token
+                var token = _jwtService.GenerateToken(user);
+
+                var userResponse = new UserResponseDto
+                {
+                    Id = user.Id,
+                    Username = user.Username,
+                    Fullname = user.Fullname,
+                    Email = user.Email,
+                    Phone = user.Phone,
+                    RoleName = user.Role?.Rolename,
+                    DepartmentName = user.Department?.Name,
+                    PositionName = user.Position?.Titlename,
+                    IsActive = user.Isactive,
+                    CreatedAt = user.Createdat
+                };
+
+                _logger.LogInformation("Nhân viên {Username} đã chấp nhận lời mời và tạo tài khoản", user.Username);
+
+                return Ok(new LoginResponseDto
+                {
+                    Success = true,
+                    Message = "Tạo tài khoản thành công",
+                    User = userResponse,
+                    Token = token
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi chấp nhận lời mời");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi khi tạo tài khoản" });
             }
         }
     }

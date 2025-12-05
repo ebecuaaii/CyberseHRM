@@ -62,6 +62,10 @@ namespace HRMCyberse
                 options.CompactionPercentage = 0.25; // Compact when 75% full
                 options.TrackStatistics = builder.Environment.IsDevelopment(); // Track stats in dev
             });
+            // Configure PayrollSettings from appsettings.json
+            builder.Services.Configure<HRMCyberse.Models.PayrollSettings>(
+                builder.Configuration.GetSection("PayrollSettings"));
+
             builder.Services.AddScoped<IPasswordService, PasswordService>();
             builder.Services.AddScoped<IJwtService, JwtService>();
             builder.Services.AddScoped<IShiftService, ShiftService>();
@@ -69,6 +73,7 @@ namespace HRMCyberse
             builder.Services.AddScoped<IAttendanceService, AttendanceService>();
             builder.Services.AddScoped<IRequestService, RequestService>();
             builder.Services.AddScoped<IPayrollService, PayrollService>();
+            builder.Services.AddScoped<IEmailService, EmailService>();
             
             // Face Recognition Service
             builder.Services.AddHttpClient<IFaceRecognitionService, FaceRecognitionService>();

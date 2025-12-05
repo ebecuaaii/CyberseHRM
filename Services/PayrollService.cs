@@ -67,7 +67,8 @@ namespace HRMCyberse.Services
                         if (attendance.Shift?.Name?.ToLower().Contains("đêm") == true ||
                             attendance.Shift?.Name?.ToLower().Contains("night") == true)
                         {
-                            nightShiftBonus += PayrollConstants.NightShiftBonus;
+                            // Night shift bonus: 30% of hourly rate
+                            nightShiftBonus += (user.Salaryrate ?? 0) * 0.3m;
                         }
                     }
                 }

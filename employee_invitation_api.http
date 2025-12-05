@@ -1,0 +1,89 @@
+### Variables
+@baseUrl = http://localhost:5267
+@token = YOUR_JWT_TOKEN_HERE
+@invitationToken = INVITATION_TOKEN_HERE
+
+### 1. Tạo lời mời nhân viên mới (cần auth Admin/Manager)
+POST {{baseUrl}}/api/EmployeeInvitation
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "newemployee@example.com",
+  "branchId": 1,
+  "roleId": 3,
+  "departmentId": 1,
+  "positionId": 1,
+  "salaryRate": 50000
+}
+
+### 2. Lấy danh sách tất cả lời mời
+GET {{baseUrl}}/api/EmployeeInvitation
+Authorization: Bearer {{token}}
+
+### 3. Lấy danh sách lời mời chưa sử dụng
+GET {{baseUrl}}/api/EmployeeInvitation?isUsed=false
+Authorization: Bearer {{token}}
+
+### 4. Lấy danh sách lời mời chưa hết hạn
+GET {{baseUrl}}/api/EmployeeInvitation?includeExpired=false
+Authorization: Bearer {{token}}
+
+### 5. Lấy chi tiết lời mời theo ID
+GET {{baseUrl}}/api/EmployeeInvitation/1
+Authorization: Bearer {{token}}
+
+### 6. Gửi lại email mời
+POST {{baseUrl}}/api/EmployeeInvitation/1/resend
+Authorization: Bearer {{token}}
+
+### 7. Xóa lời mời
+DELETE {{baseUrl}}/api/EmployeeInvitation/1
+Authorization: Bearer {{token}}
+
+### 8. Lấy thông tin invitation từ token (không cần auth - cho nhân viên)
+GET {{baseUrl}}/api/Auth/invitation/{{invitationToken}}
+
+### 9. Nhân viên tự đăng ký với Branch Code (RECOMMENDED - không cần auth)
+POST {{baseUrl}}/api/Auth/register
+Content-Type: application/json
+
+{
+  "username": "newuser123",
+  "password": "SecurePass123!",
+  "confirmPassword": "SecurePass123!",
+  "fullname": "Nguyễn Văn A",
+  "email": "testuser@company.com",
+  "phone": "0901234567",
+  "branchCode": "HN001"
+}
+
+### 9.1. (Legacy) Chấp nhận lời mời - API cũ vẫn hoạt động
+POST {{baseUrl}}/api/Auth/accept-invitation
+Content-Type: application/json
+
+{
+  "token": "{{invitationToken}}",
+  "username": "newuser123",
+  "password": "SecurePass123!",
+  "fullName": "Nguyễn Văn A",
+  "phone": "0901234567"
+}
+
+### 10. Test flow hoàn chỉnh - Tạo invitation với email cụ thể
+POST {{baseUrl}}/api/EmployeeInvitation
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "testuser@company.com",
+  "branchId": 1,
+  "roleId": 3,
+  "departmentId": 2,
+  "positionId": 3,
+  "salaryRate": 75000
+}
+
+### 11. Kiểm tra branch code
+GET {{baseUrl}}/api/Branch
+Authorization: Bearer {{token}}

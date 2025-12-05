@@ -42,40 +42,24 @@ namespace HRMCyberse.Services
                     continue;
                 }
 
-                // Calculate total hours from attendance
-                var attendances = await _context.Attendances
-                    .Include(a => a.Shift)
-                    .Where(a => a.Userid == user.Id &&
-                               a.Checkintime.HasValue &&
-                               a.Checkintime.Value >= startDate &&
-                               a.Checkintime.Value <= endDate &&
-                               a.Checkouttime.HasValue)
+                // Get attendance payroll (đã tính sẵn từ attendance_payroll)
+                var attendancePayrolls = await _context.AttendancePayrolls
+                    .Where(ap => ap.Userid == user.Id &&
+                                ap.Createdat >= startDate &&
+                                ap.Createdat < endDate.AddDays(1))
                     .ToListAsync();
 
-                decimal totalHours = 0;
-                decimal nightShiftBonus = 0;
+                // Tổng lương ca = SUM(attendance_payroll.totalamount)
+                decimal totalShiftSalary = attendancePayrolls.Sum(ap => ap.Totalamount ?? 0);
+                decimal totalHours = attendancePayrolls.Sum(ap => ap.Hoursworked ?? 0);
+                
+                // Base salary (lương cứng) - chỉ cho Manager
+                decimal baseSalary = user.Basesalary ?? 0;
+                
+                // OT (nếu có - tính riêng ngoài ca)
+                decimal overtimeAmount = attendancePayrolls.Sum(ap => ap.Overtimeamount ?? 0);
+                
                 var salaryDetails = new List<Salarydetail>();
-
-                foreach (var attendance in attendances)
-                {
-                    if (attendance.Checkintime.HasValue && attendance.Checkouttime.HasValue)
-                    {
-                        var hours = (decimal)(attendance.Checkouttime.Value - attendance.Checkintime.Value).TotalHours;
-                        totalHours += hours;
-
-                        // Check if night shift (shift name contains "đêm" or "night")
-                        if (attendance.Shift?.Name?.ToLower().Contains("đêm") == true ||
-                            attendance.Shift?.Name?.ToLower().Contains("night") == true)
-                        {
-                            // Night shift bonus: 30% of hourly rate
-                            nightShiftBonus += (user.Salaryrate ?? 0) * 0.3m;
-                        }
-                    }
-                }
-
-                // Get base salary (from user's salary rate or default)
-                decimal baseSalary = user.Salaryrate ?? 0;
-                decimal totalBaseSalary = baseSalary * totalHours;
 
                 // Get rewards and penalties for this month
                 var rewardsAndPenalties = await _context.Rewardpenalties
@@ -94,7 +78,9 @@ namespace HRMCyberse.Services
                     .Sum(rp => rp.Amount);
 
                 // Calculate net salary
-                decimal netSalary = totalBaseSalary + nightShiftBonus + totalRewards - totalPenalties;
+                // Employee: Lương ca + OT + Thưởng - Phạt
+                // Manager: Lương cứng + Lương ca + OT + Thưởng - Phạt
+                decimal netSalary = baseSalary + totalShiftSalary + overtimeAmount + totalRewards - totalPenalties;
 
                 // Create payroll record
                 var payroll = new Payroll
@@ -103,8 +89,8 @@ namespace HRMCyberse.Services
                     Month = dto.Month,
                     Year = dto.Year,
                     Totalhours = totalHours,
-                    Basesalary = totalBaseSalary,
-                    Bonuses = totalRewards + nightShiftBonus,
+                    Basesalary = baseSalary + totalShiftSalary, // Lương cứng + Lương ca
+                    Bonuses = totalRewards + overtimeAmount, // Thưởng + OT
                     Penalties = totalPenalties,
                     Netsalary = netSalary,
                     Createdat = DateTime.UtcNow
@@ -114,21 +100,35 @@ namespace HRMCyberse.Services
                 await _context.SaveChangesAsync();
 
                 // Create salary details
-                salaryDetails.Add(new Salarydetail
-                {
-                    Payrollid = payroll.Id,
-                    Description = $"{PayrollConstants.SalaryDetailType.BaseSalary} ({totalHours:F2} hours x {baseSalary:N0} VND)",
-                    Amount = totalBaseSalary,
-                    Createdat = DateTime.UtcNow
-                });
-
-                if (nightShiftBonus > 0)
+                if (baseSalary > 0)
                 {
                     salaryDetails.Add(new Salarydetail
                     {
                         Payrollid = payroll.Id,
-                        Description = PayrollConstants.SalaryDetailType.NightShiftBonus,
-                        Amount = nightShiftBonus,
+                        Description = "Lương cứng (Base Salary)",
+                        Amount = baseSalary,
+                        Createdat = DateTime.UtcNow
+                    });
+                }
+
+                if (totalShiftSalary > 0)
+                {
+                    salaryDetails.Add(new Salarydetail
+                    {
+                        Payrollid = payroll.Id,
+                        Description = $"Lương ca ({totalHours:F2} giờ)",
+                        Amount = totalShiftSalary,
+                        Createdat = DateTime.UtcNow
+                    });
+                }
+
+                if (overtimeAmount > 0)
+                {
+                    salaryDetails.Add(new Salarydetail
+                    {
+                        Payrollid = payroll.Id,
+                        Description = PayrollConstants.SalaryDetailType.Overtime,
+                        Amount = overtimeAmount,
                         Createdat = DateTime.UtcNow
                     });
                 }

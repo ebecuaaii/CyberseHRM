@@ -73,6 +73,7 @@ namespace HRMCyberse
             builder.Services.AddScoped<IAttendanceService, AttendanceService>();
             builder.Services.AddScoped<IRequestService, RequestService>();
             builder.Services.AddScoped<IPayrollService, PayrollService>();
+            builder.Services.AddScoped<IAttendancePayrollService, AttendancePayrollService>();
             builder.Services.AddScoped<IEmailService, EmailService>();
             
             // Face Recognition Service

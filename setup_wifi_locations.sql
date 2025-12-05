@@ -69,3 +69,13 @@ VALUES (
     );
 
 select * from departments;
+
+UPDATE Users SET RoleId = 2 WHERE Id = 18;
+
+select * from users;
+
+select * from positiontitles;
+
+ALTER TABLE users ADD COLUMN basesalary DECIMAL(10, 2) DEFAULT 0;
+
+COMMENT ON COLUMN users.basesalary IS 'Lương cứng tháng (cho Manager)';
